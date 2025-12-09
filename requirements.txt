@@ -1,0 +1,7 @@
+pydub
+dotenv
+torch
+torchvision
+torchaudio
+transformers 
+accelerate
