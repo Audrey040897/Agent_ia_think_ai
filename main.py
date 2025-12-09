@@ -1,10 +1,24 @@
 # main.py
-
-from pydub import AudioSegment
 import os
+import sys
+import shutil
 
-# --- Configuration ---
-AUDIO_FILE = "data_in/test_podcast.m4a"
+# Si ffmpeg est installé dans "C:\Program Files\ffmpeg\bin", ajoutez-le au PATH
+FFMPEG_BIN_DIR = r"C:\Program Files\ffmpeg\bin"
+if os.path.isdir(FFMPEG_BIN_DIR):
+    os.environ["PATH"] = FFMPEG_BIN_DIR + os.pathsep + os.environ.get("PATH", "")
+else:
+    print(f"Attention : dossier ffmpeg introuvable : {FFMPEG_BIN_DIR}")
+
+# Import de pydub après avoir modifié le PATH pour que pydub detecte ffmpeg/ffprobe
+from pydub import AudioSegment
+
+# Chemins explicites vers les exécutables ffmpeg/ffprobe (optionnel)
+AudioSegment.converter = os.path.join(FFMPEG_BIN_DIR, "ffmpeg.exe")
+AudioSegment.ffprobe = os.path.join(FFMPEG_BIN_DIR, "ffprobe.exe")
+
+# --- Configuration (à adapter) ---
+AUDIO_FILE = "data_in/test_podcast.mp3"
 OUTPUT_DIR = "data_out"
 THRESHOLD_LOW_VOLUME_DBFS = -35  # Exemple de seuil (valeur négative, plus c'est proche de 0, plus c'est fort)
 
@@ -52,9 +66,29 @@ def preprocess_audio(file_path):
 
 # --- Exécution du Pipeline ---
 if __name__ == "__main__":
-    metadata_audio = preprocess_audio(AUDIO_FILE)
+    # Diagnostics rapides
+    print(f"Working dir: {os.getcwd()}")
+    print(f"Python executable: {sys.executable}")
+    print(f"AudioSegment.converter: {getattr(AudioSegment, 'converter', None)}")
+    print(f"AudioSegment.ffprobe: {getattr(AudioSegment, 'ffprobe', None)}")
+    print(f"shutil.which(ffmpeg): {shutil.which('ffmpeg')}")
+    print(f"shutil.which(ffprobe): {shutil.which('ffprobe')}")
+
+    # Vérifier la présence du fichier audio avant d'appeler pydub
+    if not os.path.exists(AUDIO_FILE):
+        print(f"Fichier introuvable (chemin attendu) : {AUDIO_FILE}")
+        data_in_dir = os.path.join(os.getcwd(), 'data_in')
+        if os.path.exists(data_in_dir):
+            print("Contenu de data_in :")
+            for f in os.listdir(data_in_dir):
+                print(f" - {f}")
+        else:
+            print("Le dossier data_in n'existe pas dans le répertoire courant.")
+        print("Corrigez le nom du fichier dans le dossier `data_in` ou mettez à jour la variable AUDIO_FILE.")
+    else:
+        metadata_audio = preprocess_audio(AUDIO_FILE)
     
-    if metadata_audio:
+    if 'metadata_audio' in locals() and metadata_audio:
         print("\n--- Résultat du Pré-traitement ---")
         print(metadata_audio)
     else:
