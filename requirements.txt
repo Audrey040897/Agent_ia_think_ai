@@ -1,7 +1,10 @@
 pydub
+python-ffmpeg
 dotenv
 torch
 torchvision
 torchaudio
 transformers 
 accelerate
+soundfile
+librosa
