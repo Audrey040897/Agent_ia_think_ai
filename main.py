@@ -1,95 +1,81 @@
-# main.py
-import os
-import sys
-import shutil
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from services import audio, stt, nlp, publish, contributors
+from models.episode import Episode
 
-# Si ffmpeg est installé dans "C:\Program Files\ffmpeg\bin", ajoutez-le au PATH
-FFMPEG_BIN_DIR = r"C:\Program Files\ffmpeg\bin"
-if os.path.isdir(FFMPEG_BIN_DIR):
-    os.environ["PATH"] = FFMPEG_BIN_DIR + os.pathsep + os.environ.get("PATH", "")
-else:
-    print(f"Attention : dossier ffmpeg introuvable : {FFMPEG_BIN_DIR}")
+app = FastAPI(
+    title="Agent IA Inspiron",
+    description="Pipeline IA pour automatiser le traitement des podcasts Inspiron",
+    version="0.1.0"
+)
 
-# Import de pydub après avoir modifié le PATH pour que pydub detecte ffmpeg/ffprobe
-from pydub import AudioSegment
+@app.get("/")
+def health():
+    return {"status": "ok", "message": "Agent IA opérationnel"}
 
-# Chemins explicites vers les exécutables ffmpeg/ffprobe (optionnel)
-AudioSegment.converter = os.path.join(FFMPEG_BIN_DIR, "ffmpeg.exe")
-AudioSegment.ffprobe = os.path.join(FFMPEG_BIN_DIR, "ffprobe.exe")
 
-# --- Configuration (à adapter) ---
-AUDIO_FILE = "data_in/test_podcast.mp3"
-OUTPUT_DIR = "data_out"
-THRESHOLD_LOW_VOLUME_DBFS = -35  # Exemple de seuil (valeur négative, plus c'est proche de 0, plus c'est fort)
+@app.post("/upload")
+async def upload_episode(
+    file: UploadFile = File(...),
+    contributor_email: str = Form(...)
+):
+    # 1. Sauvegarde du fichier brut (mp3, mp4, etc.)
+    raw_path = await audio.save_raw_file(file)
 
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
+    # 2. Audio final + qualité (intro + épisode + analyse)
+    audio_info = audio.build_final_audio(raw_path)
 
-def preprocess_audio(file_path):
+    # 3. Transcription (Whisper) – sur la version finale
+    transcript = stt.transcribe(audio_info["final_path"])
+
+    # 4. NLP : mots-clés, catégorie, pochette
+    keywords = nlp.extract_keywords(transcript)
+    category = nlp.guess_category(transcript)
+    cover_image = nlp.map_category_to_cover(category)
+
+    # 5. Construire un épisode (brouillon)
+    episode = Episode(
+        title="Titre provisoire",
+        audio_url=audio_info["final_path"],
+        duration=audio_info["duration_seconds"],
+        transcript=transcript,
+        keywords=keywords,
+        category=category,
+        cover_image=cover_image,
+        contributor_email=contributor_email,
+        quality_status=audio_info["quality_status"],
+        quality_score=audio_info["quality_score"],
+        status="draft",
+    )
+
+    return JSONResponse({
+        "steps": {
+            "audio": "OK",
+            "transcription": "OK",
+            "nlp": "OK",
+            "publication": "NOT_SENT"
+        },
+        "episode_preview": episode.dict()
+    })
+
+
+@app.post("/check-audio-quality")
+async def check_audio_quality(file: UploadFile = File(...)):
     """
-    Vérifie la qualité de base de l'audio et extrait les métadonnées simples.
+    Vérifie uniquement la qualité audio du fichier brut (sans générique),
+    selon les critères éditoriaux.
     """
-    print(f"--- 1. Début du pré-traitement pour {file_path} ---")
-    
-    try:
-        # 1. Chargement du fichier
-        audio = AudioSegment.from_file(file_path)
-        
-        # 2. Extraction des métadonnées
-        duration_ms = len(audio)
-        duration_sec = duration_ms / 1000
-        print(f"Durée du podcast : {duration_sec:.2f} secondes.")
-        
-        # 3. Vérification de la qualité simple (Volume)
-        average_volume = audio.dBFS # Mesure le volume moyen en décibels relatifs à la pleine échelle
-        print(f"Volume moyen (dBFS) : {average_volume:.2f}")
-        
-        # 4. Production de la note de qualité
-        note_qualite = "OK"
-        if average_volume < THRESHOLD_LOW_VOLUME_DBFS:
-            note_qualite = "À revoir"
-            print("🚨 AVERTISSEMENT : Volume trop faible. Statut 'À revoir'.")
-        
-        # 5. Simulation de l'ajout des génériques (pour le scope MVP)
-        # NOTE: L'ajout réel nécessiterait les fichiers génériques et une logique de mixage.
-        # Pour le MVP, on se concentre sur les critères de vérification.
-        
-        return {
-            "duration_sec": duration_sec,
-            "average_volume": average_volume,
-            "note_qualite": note_qualite
-        }
-        
-    except Exception as e:
-        print(f"Erreur lors du pré-traitement audio : {e}")
-        return None
+    # 1. Sauvegarde du fichier brut
+    raw_path = await audio.save_raw_file(file)
 
-# --- Exécution du Pipeline ---
-if __name__ == "__main__":
-    # Diagnostics rapides
-    print(f"Working dir: {os.getcwd()}")
-    print(f"Python executable: {sys.executable}")
-    print(f"AudioSegment.converter: {getattr(AudioSegment, 'converter', None)}")
-    print(f"AudioSegment.ffprobe: {getattr(AudioSegment, 'ffprobe', None)}")
-    print(f"shutil.which(ffmpeg): {shutil.which('ffmpeg')}")
-    print(f"shutil.which(ffprobe): {shutil.which('ffprobe')}")
+    # 2. Analyse sur le fichier brut
+    quality_info = audio.analyze_raw_audio(raw_path)
 
-    # Vérifier la présence du fichier audio avant d'appeler pydub
-    if not os.path.exists(AUDIO_FILE):
-        print(f"Fichier introuvable (chemin attendu) : {AUDIO_FILE}")
-        data_in_dir = os.path.join(os.getcwd(), 'data_in')
-        if os.path.exists(data_in_dir):
-            print("Contenu de data_in :")
-            for f in os.listdir(data_in_dir):
-                print(f" - {f}")
-        else:
-            print("Le dossier data_in n'existe pas dans le répertoire courant.")
-        print("Corrigez le nom du fichier dans le dossier `data_in` ou mettez à jour la variable AUDIO_FILE.")
-    else:
-        metadata_audio = preprocess_audio(AUDIO_FILE)
-    
-    if 'metadata_audio' in locals() and metadata_audio:
-        print("\n--- Résultat du Pré-traitement ---")
-        print(metadata_audio)
-    else:
-        print("Le pipeline a échoué à l'étape du pré-traitement.")
+    return JSONResponse({
+        "step": "audio_quality_raw_only",
+        "file": quality_info["path"],
+        "duration_seconds": quality_info["duration_seconds"],
+        "quality_status": quality_info["quality_status"],
+        "quality_score": quality_info["quality_score"],
+        "quality_details": quality_info["quality_details"],
+    })
