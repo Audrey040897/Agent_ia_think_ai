@@ -14,3 +14,7 @@ class Episode(BaseModel):
     quality_status: str  # "OK" ou "A_REVOIR"
     quality_score: int   # 0–100
     status: str = "draft"
+    contributor_name: str | None = None
+    contributor_photo: str | None = None
+    contributor_bio: str | None = None
+

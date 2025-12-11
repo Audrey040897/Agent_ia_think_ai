@@ -1,8 +1,6 @@
-
-
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
-from services import audio, stt, nlp, publish
+from services import audio, stt, nlp, publish, contributors
 from models.episode import Episode
 
 app = FastAPI(
@@ -15,6 +13,7 @@ app = FastAPI(
 def health():
     return {"status": "ok", "message": "Agent IA opérationnel"}
 
+
 @app.post("/upload")
 async def upload_episode(
     file: UploadFile = File(...),
@@ -23,10 +22,10 @@ async def upload_episode(
     # 1. Sauvegarde du fichier brut (mp3, mp4, etc.)
     raw_path = await audio.save_raw_file(file)
 
-    # 2. Audio final + qualité (V1 : copie + éventuelle conversion en wav)
+    # 2. Audio final + qualité (intro + épisode + analyse)
     audio_info = audio.build_final_audio(raw_path)
 
-    # 3. Transcription (pour l'instant : simulée dans stt.py)
+    # 3. Transcription (Whisper) – sur la version finale
     transcript = stt.transcribe(audio_info["final_path"])
 
     # 4. NLP : mots-clés, catégorie, pochette
@@ -52,9 +51,31 @@ async def upload_episode(
     return JSONResponse({
         "steps": {
             "audio": "OK",
-            "transcription": "OK (simulée)",
+            "transcription": "OK",
             "nlp": "OK",
             "publication": "NOT_SENT"
         },
         "episode_preview": episode.dict()
+    })
+
+
+@app.post("/check-audio-quality")
+async def check_audio_quality(file: UploadFile = File(...)):
+    """
+    Vérifie uniquement la qualité audio du fichier brut (sans générique),
+    selon les critères éditoriaux.
+    """
+    # 1. Sauvegarde du fichier brut
+    raw_path = await audio.save_raw_file(file)
+
+    # 2. Analyse sur le fichier brut
+    quality_info = audio.analyze_raw_audio(raw_path)
+
+    return JSONResponse({
+        "step": "audio_quality_raw_only",
+        "file": quality_info["path"],
+        "duration_seconds": quality_info["duration_seconds"],
+        "quality_status": quality_info["quality_status"],
+        "quality_score": quality_info["quality_score"],
+        "quality_details": quality_info["quality_details"],
     })

@@ -1,53 +1,35 @@
-"""
-Module de transcription audio.
-
-V1 :
-- Essaie d'utiliser Whisper (modèle "small") pour une vraie transcription.
-- Si Whisper ou ffmpeg ne sont pas dispos, on revient à une transcription simulée
-  pour ne jamais casser le pipeline.
-"""
-
 from pathlib import Path
+import whisper
 
-try:
-    import whisper
-    WHISPER_AVAILABLE = True
-except Exception:
-    whisper = None
-    WHISPER_AVAILABLE = False
-
-
-# On charge le modèle une seule fois si possible
-MODEL = None
-if WHISPER_AVAILABLE:
-    try:
-        MODEL = whisper.load_model("small")  # tu peux mettre "base" ou "tiny" si c'est trop lourd
-    except Exception:
-        MODEL = None
-        WHISPER_AVAILABLE = False
+# On charge le modèle Whisper une seule fois
+model = whisper.load_model("base")
 
 
 def transcribe(audio_path: str) -> str:
     """
-    Transcrit un fichier audio/vidéo avec Whisper si possible.
-    Sinon, renvoie une transcription simulée.
+    Transcrit un fichier audio ou vidéo avec Whisper.
+    En cas d'erreur, retourne un message explicite sans casser l'API.
     """
-    # Si Whisper n'est pas dispo (problème d'installation, ffmpeg manquant, etc.)
-    if not WHISPER_AVAILABLE or MODEL is None:
-        return f"[Transcription simulée] Whisper non disponible. Fichier : {audio_path}"
+    audio_path_str = str(Path(audio_path))
+
+    # 1) Vérifier que le fichier existe vraiment
+    p = Path(audio_path_str)
+    if not p.exists():
+        return f"[Transcription impossible] Fichier introuvable : {audio_path_str}"
 
     try:
-        # Whisper gère mp3, wav, mp4, m4a, etc.
-        audio_path_str = str(Path(audio_path))
-        result = MODEL.transcribe(audio_path_str, language="fr", fp16=False)
+        print(f"🔍 Transcription en cours : {audio_path_str}")
+
+        result = model.transcribe(audio_path_str, language="fr", fp16=False)
         text = result.get("text", "").strip()
 
         if not text:
-            return f"[Transcription vide] Whisper n'a rien détecté. Fichier : {audio_path}"
+            return "[Transcription vide] Aucun texte détecté dans l'audio."
 
         return text
 
-    except Exception as e:
-        # En cas d'erreur (ex : ffmpeg absent), on ne casse pas l'API
-        return f"[Transcription simulée après erreur Whisper : {e}] Fichier : {audio_path}"
-
+    except Exception:
+        return (
+            "[Transcription non disponible pour cet épisode] "
+            "La transcription automatique sera activée dans la prochaine version de l’agent."
+        )
