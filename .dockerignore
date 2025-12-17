@@ -1,0 +1,15 @@
+﻿.venv
+env
+__pycache__/
+*.pyc
+.git/
+uploads/
+*.wav
+*.mp3
+*.mp4
+*.m4a
+*.flac
+*.pt
+*.bin
+*.zip
+*.log
