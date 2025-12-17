@@ -66,3 +66,26 @@ FFmpeg installé pour traiter l’audio (Windows/Mac/Linux)
 Contributeurs
 Ce projet est développé pour Inspiron, dans une démarche d’innovation au service de la santé mentale et du bien-être au travail.
 
+# Déploiement en production
+
+### 1.Pré-requis : Windows 11, Docker Desktop installé et démarré (WSL2 activé), Git.
+
+### 2.Récupérer le projet : git clone <repo> puis cd Agent_ia_think_ai
+
+### 3.Lancer en 1 commande : docker compose up --build (premier lancement = téléchargement des images et dépendances).
+
+### 4.Accéder à l’agent : UI Streamlit → http://localhost:8501 ; API FastAPI → http://localhost:8000/docs.
+
+### 5.Workflow : déposer un fichier audio dans l’UI → lancer la transcription → vérifier le résumé/métadonnées → publier (si connecté au back).
+
+### 6.Stopper : Ct;rl + C dans le terminal.
+
+### 7.Relancer rapidement : docker compose up (sans rebuild) ou docker compose up -d (en arrière-plan).
+
+### 8.Logs / debug : docker compose logs -f (ou docker compose logs api -f / docker compose logs ui -f).
+
+###  9.Nettoyer : docker compose down ; nettoyage complet (images/volumes) : docker compose down -v puis docker system prune -af.
+
+###  10.Mise à jour du code : git pull puis docker compose up --build pour reconstruire l’image.
+
+###  11. Dépannage rapide : si ports occupés → changer 8000:8000 / 8501:8501 ; si espace disque → nettoyer Docker Desktop / docker system prune -af.
