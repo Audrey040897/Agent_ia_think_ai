@@ -20,3 +20,5 @@ tqdm
 rich
 email-validator
 streamlit
+
+openai 
